@@ -1,0 +1,55 @@
+﻿@page "/"
+
+@* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
+<PageTitle>Smart-X Gateway</PageTitle>
+
+<div class="py-4">
+    <p class="text-uppercase text-primary fw-semibold mb-2">Smart-X IoT management gateway</p>
+    <p class="text-secondary mb-2">Prepared by Thonipho Mavhungu | Student number: ST10121100</p>
+    <h1 class="display-5 fw-bold">What would you like to do?</h1>
+    <p class="lead text-secondary mb-4">
+        Smart-X brings telemetry, device control and network configuration into one management interface.
+        Part 1 focuses on ingesting and investigating sensor telemetry.
+    </p>
+
+    <div class="row row-cols-1 row-cols-lg-3 g-4">
+        <div class="col">
+            <section class="card h-100 border-primary shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <span class="badge text-bg-primary align-self-start mb-3">Available in Part 1</span>
+                    <h2 class="h4">Sensor Data Ingestion and Telemetry</h2>
+                    <p class="text-secondary flex-grow-1">
+                        Register sensors, receive simulated readings and investigate device telemetry.
+                    </p>
+                    <NavLink class="btn btn-primary" href="telemetry">Open telemetry workspace</NavLink>
+                </div>
+            </section>
+        </div>
+
+        <div class="col">
+            <section class="card h-100 bg-light border-0">
+                <div class="card-body d-flex flex-column">
+                    <span class="badge text-bg-success align-self-start mb-3">Part 2 available</span>
+                    <h2 class="h4">Real-Time Command Stream and History</h2>
+                    <p class="text-secondary flex-grow-1">
+                        Send commands to devices and review their command history.
+                    </p>
+                    <NavLink class="btn btn-primary" href="command-stream">Open command stream</NavLink>
+                </div>
+            </section>
+        </div>
+
+        <div class="col">
+            <section class="card h-100 bg-light border-0">
+                <div class="card-body d-flex flex-column">
+                    <span class="badge text-bg-secondary align-self-start mb-3">Final PoE</span>
+                    <h2 class="h4">Network Topology and Mesh Routing</h2>
+                    <p class="text-secondary flex-grow-1">
+                        View device relationships and monitor mesh routing paths.
+                    </p>
+                    <button class="btn btn-outline-secondary" disabled>Not available yet</button>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,479 @@
+@page "/telemetry"
+@inject SmartX.Client.Services.SensorApiClient SensorApi
+@* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
+
+<PageTitle>Telemetry Workspace</PageTitle>
+
+<div class="py-4">
+    <p class="text-uppercase text-primary fw-semibold mb-2">Part 1 workspace</p>
+    <h1>Sensor Data Ingestion and Telemetry</h1>
+    <p class="lead text-secondary">
+        Register a sensor before sending its telemetry to Smart-X.
+    </p>
+
+    <section class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 mb-0">Proactive alerts</h2>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAlertsAsync">Refresh alerts</button>
+            </div>
+
+            @if (alerts.Count == 0)
+            {
+                <p class="text-secondary mb-0">No active alerts. All monitored readings are within the configured rules.</p>
+            }
+            else
+            {
+                @foreach (var alert in alerts)
+                {
+                    <div class="alert @GetAlertStyle(alert.Severity) d-flex justify-content-between align-items-start" role="alert">
+                        <div>
+                            <strong>@alert.DeviceId - @alert.MetricName</strong>
+                            <div>@alert.Message</div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-dark ms-3" @onclick="() => InvestigateAlertAsync(alert)">Investigate</button>
+                    </div>
+                }
+            }
+
+            @if (selectedAlert is not null)
+            {
+                <section class="alert-investigation mt-3" aria-label="Alert investigation details">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <p class="text-uppercase fw-semibold mb-1">Investigation details</p>
+                            <h3 class="h5">@selectedAlert.DeviceId - @selectedAlert.MetricName</h3>
+                            <p><strong>Detected:</strong> @FormatTimestamp(selectedAlert.DetectedAtUtc)</p>
+                            <p><strong>Issue:</strong> @selectedAlert.Message</p>
+                            <p class="mb-0"><strong>Recommended action:</strong> @selectedAlert.SuggestedAction</p>
+                        </div>
+                        <button class="btn-close" aria-label="Close investigation" @onclick="CloseInvestigation"></button>
+                    </div>
+                    <p class="mb-0 mt-3 text-secondary">The sensor history below has been updated for this device. Use the metric filter to compare its readings.</p>
+                </section>
+            }
+        </div>
+    </section>
+
+    @if (message is not null)
+    {
+        <div class="alert @messageStyle" role="alert">@message</div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <section class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h4">Register a sensor</h2>
+                    <EditForm Model="newSensor" OnSubmit="RegisterSensorAsync">
+                        <div class="mb-3">
+                            <label class="form-label" for="deviceId">Device ID</label>
+                            <InputText id="deviceId" class="form-control" @bind-Value="newSensor.DeviceId" placeholder="SENSOR-001" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="macAddress">MAC address</label>
+                            <InputText id="macAddress" class="form-control" @bind-Value="newSensor.MacAddress" placeholder="AA:BB:CC:DD:EE:FF" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="location">Deployment location</label>
+                            <InputText id="location" class="form-control" @bind-Value="newSensor.DeploymentLocation" placeholder="Hydroponic Farm A - Zone 1" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="category">Category</label>
+                            <InputSelect id="category" class="form-select" @bind-Value="newSensor.Category">
+                                @foreach (var category in Enum.GetValues<SensorCategory>())
+                                {
+                                    <option value="@category">@category</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <button class="btn btn-primary" type="submit">Register sensor</button>
+                    </EditForm>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-7">
+            <section class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h4 mb-0">Registered sensors</h2>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadSensorsAsync">Refresh</button>
+                    </div>
+
+                    @if (registeredSensors.Count == 0)
+                    {
+                        <p class="text-secondary mb-0">No sensors have been registered yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Device ID</th>
+                                        <th>Location</th>
+                                        <th>Category</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sensor in registeredSensors)
+                                    {
+                                        <tr>
+                                            <td>@sensor.DeviceId</td>
+                                            <td>@sensor.DeploymentLocation</td>
+                                            <td>@sensor.Category</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section class="card shadow-sm mt-4">
+        <div class="card-body">
+            <h2 class="h4">Sensor attachments</h2>
+            <p class="text-secondary">Attach configuration files, deployment photos, or hardware log files to the selected sensor.</p>
+
+            <div class="row align-items-end g-3">
+                <div class="col-md-5">
+                    <label class="form-label" for="attachmentSensor">Sensor profile</label>
+                    <InputSelect id="attachmentSensor" class="form-select" @bind-Value="selectedDeviceId">
+                        @foreach (var sensor in registeredSensors)
+                        {
+                            <option value="@sensor.DeviceId">@sensor.DeviceId - @sensor.DeploymentLocation</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="attachmentFile">Attachment (max 10 MB)</label>
+                    <InputFile id="attachmentFile" class="form-control" OnChange="SelectAttachment" accept=".txt,.log,.json,.xml,.jpg,.jpeg,.png,.pdf" />
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary" @onclick="UploadAttachmentAsync" disabled="@(selectedAttachmentFile is null || string.IsNullOrWhiteSpace(selectedDeviceId))">Upload</button>
+                    <button class="btn btn-outline-secondary" @onclick="LoadAttachmentsAsync" disabled="@string.IsNullOrWhiteSpace(selectedDeviceId)">Refresh</button>
+                </div>
+            </div>
+
+            @if (attachmentMessage is not null)
+            {
+                <div class="alert @attachmentMessageStyle mt-3 mb-0" role="status">@attachmentMessage</div>
+            }
+
+            <div class="mt-3">
+                @if (attachments.Count == 0)
+                {
+                    <p class="text-secondary mb-0">No files are attached to this sensor yet.</p>
+                }
+                else
+                {
+                    <ul class="list-group">
+                        @foreach (var attachment in attachments)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>@attachment.FileName</span>
+                                <small class="text-secondary">@FormatFileSize(attachment.SizeBytes) - @FormatTimestamp(attachment.UploadedAtUtc)</small>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="card shadow-sm mt-4">
+        <div class="card-body">
+            <div class="row align-items-end g-3 mb-3">
+                <div class="col-md-7">
+                    <label class="form-label" for="historySensor">Sensor telemetry history</label>
+                    <InputSelect id="historySensor" class="form-select" @bind-Value="selectedDeviceId">
+                        @foreach (var sensor in registeredSensors)
+                        {
+                            <option value="@sensor.DeviceId">@sensor.DeviceId - @sensor.DeploymentLocation</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="col-md-5">
+                    <button class="btn btn-outline-primary" @onclick="LoadSelectedTelemetryAsync" disabled="@(!registeredSensors.Any())">
+                        View history
+                    </button>
+                </div>
+            </div>
+
+            @if (selectedHistory is not null)
+            {
+                <div class="mb-4">
+                    <label class="form-label" for="metricFilter">Filter by metric</label>
+                    <InputSelect id="metricFilter" class="form-select" @bind-Value="selectedMetric">
+                        <option value="">All metrics</option>
+                        @foreach (var metric in AvailableMetrics)
+                        {
+                            <option value="@metric">@metric</option>
+                        }
+                    </InputSelect>
+                    <div class="form-text">Choose a metric to reduce the readings shown below. Select any reading for more detail.</div>
+                </div>
+
+                <div class="row row-cols-1 row-cols-lg-3 g-3">
+                    <div class="col">
+                        <h3 class="h6 text-uppercase text-secondary">Decimal readings</h3>
+                        @foreach (var packet in FilterPackets(selectedHistory.FloatPackets))
+                        {
+                            <button class="list-group-item list-group-item-action mb-2 border rounded text-start" type="button" @onclick="() => ShowPacketDetails(packet)">
+                                <strong>@packet.Value</strong> @packet.MetricName
+                                <small class="d-block text-secondary">@FormatTimestamp(packet.RecordedAtUtc)</small>
+                            </button>
+                        }
+                    </div>
+                    <div class="col">
+                        <h3 class="h6 text-uppercase text-secondary">Whole-number readings</h3>
+                        @foreach (var packet in FilterPackets(selectedHistory.IntegerPackets))
+                        {
+                            <button class="list-group-item list-group-item-action mb-2 border rounded text-start" type="button" @onclick="() => ShowPacketDetails(packet)">
+                                <strong>@packet.Value</strong> @packet.MetricName
+                                <small class="d-block text-secondary">@FormatTimestamp(packet.RecordedAtUtc)</small>
+                            </button>
+                        }
+                    </div>
+                    <div class="col">
+                        <h3 class="h6 text-uppercase text-secondary">Switch-state readings</h3>
+                        @foreach (var packet in FilterPackets(selectedHistory.BooleanPackets))
+                        {
+                            <button class="list-group-item list-group-item-action mb-2 border rounded text-start" type="button" @onclick="() => ShowPacketDetails(packet)">
+                                <strong>@packet.Value</strong> @packet.MetricName
+                                <small class="d-block text-secondary">@FormatTimestamp(packet.RecordedAtUtc)</small>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (selectedPacketDetails is not null)
+                {
+                    <div class="alert alert-info mt-4 mb-0" role="status">
+                        <strong>Selected reading:</strong> @selectedPacketDetails
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+    <NavLink class="btn btn-link px-0 mt-4" href="">Back to gateway</NavLink>
+</div>
+
+@code {
+    private SensorProfile newSensor = new();
+    private List<SensorProfile> registeredSensors = [];
+    private List<TelemetryAlert> alerts = [];
+    private TelemetryAlert? selectedAlert;
+    private TelemetryHistory? selectedHistory;
+    private List<SensorAttachment> attachments = [];
+    private IBrowserFile? selectedAttachmentFile;
+    private string selectedDeviceId = string.Empty;
+    private string selectedMetric = string.Empty;
+    private string? selectedPacketDetails;
+    private string? message;
+    private string messageStyle = "alert-info";
+    private string? attachmentMessage;
+    private string attachmentMessageStyle = "alert-info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSensorsAsync();
+        await LoadAlertsAsync();
+    }
+
+    private async Task LoadSensorsAsync()
+    {
+        try
+        {
+            registeredSensors = await SensorApi.GetSensorsAsync();
+
+            if (registeredSensors.Count > 0 && string.IsNullOrEmpty(selectedDeviceId))
+            {
+                selectedDeviceId = registeredSensors[0].DeviceId;
+                await LoadSelectedTelemetryAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            message = "The API is not running. Start SmartX.Api, then refresh this page.";
+            messageStyle = "alert-warning";
+        }
+    }
+
+    private async Task RegisterSensorAsync()
+    {
+        try
+        {
+            var response = await SensorApi.RegisterSensorAsync(newSensor);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                message = response.StatusCode == System.Net.HttpStatusCode.Conflict
+                    ? "This device ID or MAC address is already registered."
+                    : "Please enter a device ID, MAC address and deployment location.";
+                messageStyle = "alert-danger";
+                return;
+            }
+
+            message = $"{newSensor.DeviceId} was registered successfully.";
+            messageStyle = "alert-success";
+            newSensor = new SensorProfile();
+            await LoadSensorsAsync();
+            await LoadAlertsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The API is not running. Start SmartX.Api, then try again.";
+            messageStyle = "alert-warning";
+        }
+    }
+
+    private async Task LoadSelectedTelemetryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        {
+            return;
+        }
+
+        try
+        {
+            selectedHistory = await SensorApi.GetTelemetryHistoryAsync(selectedDeviceId);
+            selectedMetric = string.Empty;
+            selectedPacketDetails = null;
+            await LoadAttachmentsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The API is not running. Start SmartX.Api, then try again.";
+            messageStyle = "alert-warning";
+        }
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        try
+        {
+            alerts = await SensorApi.GetAlertsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            message = "The API is not running. Start SmartX.Api, then try again.";
+            messageStyle = "alert-warning";
+        }
+    }
+
+    private async Task InvestigateAlertAsync(TelemetryAlert alert)
+    {
+        selectedAlert = alert;
+        selectedDeviceId = alert.DeviceId;
+        await LoadSelectedTelemetryAsync();
+    }
+
+    private void CloseInvestigation()
+    {
+        selectedAlert = null;
+    }
+
+    private static string GetAlertStyle(AlertSeverity severity)
+    {
+        return severity == AlertSeverity.Critical ? "alert-danger" : "alert-warning";
+    }
+
+    private IEnumerable<string> AvailableMetrics => selectedHistory is null
+        ? []
+        : selectedHistory.FloatPackets.Select(packet => packet.MetricName)
+            .Concat(selectedHistory.IntegerPackets.Select(packet => packet.MetricName))
+            .Concat(selectedHistory.BooleanPackets.Select(packet => packet.MetricName))
+            .Distinct()
+            .OrderBy(metric => metric);
+
+    private IEnumerable<TelemetryPacket<T>> FilterPackets<T>(IEnumerable<TelemetryPacket<T>> packets)
+    {
+        return string.IsNullOrWhiteSpace(selectedMetric)
+            ? packets
+            : packets.Where(packet => packet.MetricName == selectedMetric);
+    }
+
+    private void ShowPacketDetails<T>(TelemetryPacket<T> packet)
+    {
+        selectedPacketDetails = $"{packet.MetricName}: {packet.Value} from {packet.DeviceId} at {packet.RecordedAtUtc.ToLocalTime():g}.";
+    }
+
+    private static string FormatTimestamp(DateTime timestampUtc)
+    {
+        return timestampUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm");
+    }
+
+    private void SelectAttachment(InputFileChangeEventArgs eventArgs)
+    {
+        selectedAttachmentFile = eventArgs.File;
+        attachmentMessage = $"{selectedAttachmentFile.Name} is ready to upload.";
+        attachmentMessageStyle = "alert-info";
+    }
+
+    private async Task UploadAttachmentAsync()
+    {
+        if (selectedAttachmentFile is null || string.IsNullOrWhiteSpace(selectedDeviceId))
+        {
+            return;
+        }
+
+        try
+        {
+            await using var fileStream = selectedAttachmentFile.OpenReadStream(10 * 1024 * 1024);
+            var response = await SensorApi.UploadAttachmentAsync(
+                selectedDeviceId,
+                selectedAttachmentFile.Name,
+                selectedAttachmentFile.ContentType,
+                fileStream);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                attachmentMessage = "The attachment could not be uploaded. Confirm the file is 10 MB or smaller.";
+                attachmentMessageStyle = "alert-danger";
+                return;
+            }
+
+            attachmentMessage = $"{selectedAttachmentFile.Name} was attached successfully.";
+            attachmentMessageStyle = "alert-success";
+            selectedAttachmentFile = null;
+            await LoadAttachmentsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            attachmentMessage = "The API is not running. Start SmartX.Api, then try again.";
+            attachmentMessageStyle = "alert-warning";
+        }
+    }
+
+    private async Task LoadAttachmentsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        {
+            attachments = [];
+            return;
+        }
+
+        try
+        {
+            attachments = await SensorApi.GetAttachmentsAsync(selectedDeviceId);
+        }
+        catch (HttpRequestException)
+        {
+            attachmentMessage = "The API is not running. Start SmartX.Api, then try again.";
+            attachmentMessageStyle = "alert-warning";
+        }
+    }
+
+    private static string FormatFileSize(long sizeBytes)
+    {
+        return sizeBytes < 1024 * 1024
+            ? $"{sizeBytes / 1024d:F1} KB"
+            : $"{sizeBytes / 1024d / 1024d:F1} MB";
+    }
+}
