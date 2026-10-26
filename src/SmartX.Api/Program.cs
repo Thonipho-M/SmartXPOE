@@ -20,6 +20,7 @@ builder.Services.AddSingleton<ManualOverrideCommandStore>();
 builder.Services.AddSingleton<OperatorActivityTracker>();
 builder.Services.AddSingleton<PredictiveRecommendationEngine>();
 builder.Services.AddSingleton<TelemetrySimulationState>();
+builder.Services.AddSingleton<MeshNetworkGraph>();
 
 var app = builder.Build();
 
@@ -43,6 +44,7 @@ var manualOverrides = app.Services.GetRequiredService<ManualOverrideCommandStore
 var activityTracker = app.Services.GetRequiredService<OperatorActivityTracker>();
 var recommendationEngine = app.Services.GetRequiredService<PredictiveRecommendationEngine>();
 var telemetrySimulation = app.Services.GetRequiredService<TelemetrySimulationState>();
+var meshNetwork = app.Services.GetRequiredService<MeshNetworkGraph>();
 
 // This list is temporary storage for Part 1. It is cleared when the API stops.
 var registeredSensors = new List<SensorProfile>();
@@ -192,6 +194,7 @@ MockTelemetrySeeder.Seed(
     booleanTelemetry);
 
 liveDeviceRegistry.LoadExistingDevices(registeredSensors);
+MeshNetworkSeeder.Seed(meshNetwork, registeredSensors);
 
 foreach (var packet in floatTelemetry)
 {
