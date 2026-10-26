@@ -196,6 +196,24 @@ MockTelemetrySeeder.Seed(
 liveDeviceRegistry.LoadExistingDevices(registeredSensors);
 MeshNetworkSeeder.Seed(meshNetwork, registeredSensors);
 
+var network = app.MapGroup("/api/network")
+    .WithTags("Network Topology");
+
+// GET /api/network/topology supplies the complete graph for the mesh dashboard.
+network.MapGet("/topology", () => Results.Ok(new NetworkTopologySnapshot
+{
+    Nodes = meshNetwork.GetNodes(),
+    Links = meshNetwork.GetLinks()
+}))
+.WithName("GetNetworkTopology");
+
+// These focused endpoints are useful when a page needs only nodes or connections.
+network.MapGet("/nodes", () => Results.Ok(meshNetwork.GetNodes()))
+    .WithName("GetNetworkNodes");
+
+network.MapGet("/links", () => Results.Ok(meshNetwork.GetLinks()))
+    .WithName("GetNetworkLinks");
+
 foreach (var packet in floatTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
