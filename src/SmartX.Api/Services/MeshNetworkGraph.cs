@@ -44,6 +44,17 @@ public sealed class MeshNetworkGraph
     public bool TryGetNode(string deviceId, out MeshNetworkNode? node) =>
         nodesById.TryGetValue(deviceId, out node);
 
+    public bool SetNodeOnlineStatus(string deviceId, bool isOnline)
+    {
+        if (!nodesById.TryGetValue(deviceId, out var node))
+        {
+            return false;
+        }
+
+        node.IsOnline = isOnline;
+        return true;
+    }
+
     // Returns only usable, active routes from a device to online neighbours.
     public IReadOnlyList<MeshNetworkNode> GetActiveNeighbours(string deviceId)
     {

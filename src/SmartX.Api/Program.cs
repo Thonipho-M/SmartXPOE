@@ -226,6 +226,19 @@ network.MapGet("/connectivity/{startingDeviceId}", (string startingDeviceId) =>
 })
 .WithName("GetNetworkConnectivity");
 
+// PUT /api/network/nodes/{deviceId}/status simulates a node failure or recovery.
+network.MapPut("/nodes/{deviceId}/status", (string deviceId, MeshNodeStatusUpdate update) =>
+{
+    if (!meshNetwork.SetNodeOnlineStatus(deviceId, update.IsOnline))
+    {
+        return Results.NotFound(new { message = "The selected mesh node does not exist." });
+    }
+
+    meshNetwork.TryGetNode(deviceId, out var updatedNode);
+    return Results.Ok(updatedNode);
+})
+.WithName("UpdateMeshNodeStatus");
+
 foreach (var packet in floatTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
