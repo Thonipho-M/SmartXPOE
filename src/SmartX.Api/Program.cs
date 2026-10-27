@@ -214,6 +214,18 @@ network.MapGet("/nodes", () => Results.Ok(meshNetwork.GetNodes()))
 network.MapGet("/links", () => Results.Ok(meshNetwork.GetLinks()))
     .WithName("GetNetworkLinks");
 
+// BFS report identifies devices that can and cannot currently reach a chosen gateway or node.
+network.MapGet("/connectivity/{startingDeviceId}", (string startingDeviceId) =>
+{
+    if (!meshNetwork.TryGetNode(startingDeviceId, out _))
+    {
+        return Results.NotFound(new { message = "The selected mesh node does not exist." });
+    }
+
+    return Results.Ok(meshNetwork.GetConnectivityReport(startingDeviceId));
+})
+.WithName("GetNetworkConnectivity");
+
 foreach (var packet in floatTelemetry)
 {
     sortedTelemetryHistory.Add(packet);

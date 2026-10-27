@@ -96,4 +96,24 @@ public sealed class MeshNetworkGraph
 
         return reachableNodes;
     }
+
+    public NetworkConnectivityReport GetConnectivityReport(string startingDeviceId)
+    {
+        var reachableNodes = GetReachableNodes(startingDeviceId);
+        var reachableDeviceIds = reachableNodes
+            .Select(node => node.DeviceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return new NetworkConnectivityReport
+        {
+            StartingDeviceId = startingDeviceId,
+            ReachableNodes = reachableNodes,
+            UnreachableOnlineNodes = nodesById.Values
+                .Where(node => node.IsOnline && !reachableDeviceIds.Contains(node.DeviceId))
+                .ToList(),
+            OfflineNodes = nodesById.Values
+                .Where(node => !node.IsOnline)
+                .ToList()
+        };
+    }
 }
