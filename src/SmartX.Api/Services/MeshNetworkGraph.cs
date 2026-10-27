@@ -127,4 +127,79 @@ public sealed class MeshNetworkGraph
                 .ToList()
         };
     }
+
+    // Prim's algorithm uses a priority queue (min-heap) to choose the cheapest next mesh hop.
+    public MinimumSpanningTreeResult GetMinimumSpanningTree(string startingDeviceId)
+    {
+        if (!TryGetNode(startingDeviceId, out var startingNode) || startingNode is null || !startingNode.IsOnline)
+        {
+            return new MinimumSpanningTreeResult
+            {
+                StartingDeviceId = startingDeviceId,
+                UnconnectedDeviceIds = nodesById.Values
+                    .Where(node => node.IsOnline)
+                    .Select(node => node.DeviceId)
+                    .ToList()
+            };
+        }
+
+        var connectedDeviceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            startingNode.DeviceId
+        };
+        var candidateLinks = new PriorityQueue<MeshNetworkLink, int>();
+        var selectedLinks = new List<MeshNetworkLink>();
+        var totalRoutingCost = 0;
+
+        AddCandidateLinks(startingNode.DeviceId, candidateLinks);
+
+        while (candidateLinks.TryDequeue(out var link, out _))
+        {
+            var fromIsConnected = connectedDeviceIds.Contains(link.FromDeviceId);
+            var toIsConnected = connectedDeviceIds.Contains(link.ToDeviceId);
+
+            // A useful tree link has exactly one endpoint already connected.
+            if (fromIsConnected == toIsConnected)
+            {
+                continue;
+            }
+
+            var nextDeviceId = fromIsConnected ? link.ToDeviceId : link.FromDeviceId;
+            var nextNode = nodesById[nextDeviceId];
+
+            if (!nextNode.IsOnline)
+            {
+                continue;
+            }
+
+            connectedDeviceIds.Add(nextDeviceId);
+            selectedLinks.Add(link);
+            totalRoutingCost += link.RoutingCost;
+            AddCandidateLinks(nextDeviceId, candidateLinks);
+        }
+
+        return new MinimumSpanningTreeResult
+        {
+            StartingDeviceId = startingNode.DeviceId,
+            SelectedLinks = selectedLinks,
+            TotalRoutingCost = totalRoutingCost,
+            UnconnectedDeviceIds = nodesById.Values
+                .Where(node => node.IsOnline && !connectedDeviceIds.Contains(node.DeviceId))
+                .Select(node => node.DeviceId)
+                .ToList()
+        };
+    }
+
+    private void AddCandidateLinks(string deviceId, PriorityQueue<MeshNetworkLink, int> candidateLinks)
+    {
+        if (!linksByDeviceId.TryGetValue(deviceId, out var deviceLinks))
+        {
+            return;
+        }
+
+        foreach (var link in deviceLinks.Where(link => link.IsActive))
+        {
+            candidateLinks.Enqueue(link, link.RoutingCost);
+        }
+    }
 }
