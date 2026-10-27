@@ -239,6 +239,18 @@ network.MapPut("/nodes/{deviceId}/status", (string deviceId, MeshNodeStatusUpdat
 })
 .WithName("UpdateMeshNodeStatus");
 
+// Prim's algorithm returns the lowest-cost active mesh links from the selected starting node.
+network.MapGet("/minimum-spanning-tree/{startingDeviceId}", (string startingDeviceId) =>
+{
+    if (!meshNetwork.TryGetNode(startingDeviceId, out _))
+    {
+        return Results.NotFound(new { message = "The selected mesh node does not exist." });
+    }
+
+    return Results.Ok(meshNetwork.GetMinimumSpanningTree(startingDeviceId));
+})
+.WithName("GetMinimumSpanningTree");
+
 foreach (var packet in floatTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
