@@ -16,6 +16,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddSingleton<RealTimeCommandStreamStore>();
 builder.Services.AddSingleton<LiveDeviceRegistry>();
 builder.Services.AddSingleton<SortedTelemetryHistoryStore>();
+builder.Services.AddSingleton<TelemetryRangeSearchTree>();
 builder.Services.AddSingleton<ManualOverrideCommandStore>();
 builder.Services.AddSingleton<OperatorActivityTracker>();
 builder.Services.AddSingleton<PredictiveRecommendationEngine>();
@@ -40,6 +41,7 @@ app.UseCors("BlazorClient");
 var commandStream = app.Services.GetRequiredService<RealTimeCommandStreamStore>();
 var liveDeviceRegistry = app.Services.GetRequiredService<LiveDeviceRegistry>();
 var sortedTelemetryHistory = app.Services.GetRequiredService<SortedTelemetryHistoryStore>();
+var telemetryRangeSearchTree = app.Services.GetRequiredService<TelemetryRangeSearchTree>();
 var manualOverrides = app.Services.GetRequiredService<ManualOverrideCommandStore>();
 var activityTracker = app.Services.GetRequiredService<OperatorActivityTracker>();
 var recommendationEngine = app.Services.GetRequiredService<PredictiveRecommendationEngine>();
@@ -254,18 +256,21 @@ network.MapGet("/minimum-spanning-tree/{startingDeviceId}", (string startingDevi
 foreach (var packet in floatTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
+    telemetryRangeSearchTree.Add(packet);
     commandStream.EnqueueTelemetry(packet);
 }
 
 foreach (var packet in integerTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
+    telemetryRangeSearchTree.Add(packet);
     commandStream.EnqueueTelemetry(packet);
 }
 
 foreach (var packet in booleanTelemetry)
 {
     sortedTelemetryHistory.Add(packet);
+    telemetryRangeSearchTree.Add(packet);
     commandStream.EnqueueTelemetry(packet);
 }
 
@@ -485,6 +490,7 @@ IResult StoreTelemetryPacket<T>(TelemetryPacket<T> packet, List<TelemetryPacket<
 
     commandStream.EnqueueTelemetry(packet);
     sortedTelemetryHistory.Add(packet);
+    telemetryRangeSearchTree.Add(packet);
     packetList.Add(packet);
 
     commandStream.UpdateCriticalAlerts(TelemetryAlertEvaluator.Evaluate(
