@@ -61,4 +61,39 @@ public sealed class MeshNetworkGraph
             .Where(node => node.IsOnline)
             .ToList();
     }
+
+    // Breadth-First Search (BFS) discovers every online node reachable through active links.
+    public IReadOnlyList<MeshNetworkNode> GetReachableNodes(string startingDeviceId)
+    {
+        if (!TryGetNode(startingDeviceId, out var startingNode) || startingNode is null || !startingNode.IsOnline)
+        {
+            return [];
+        }
+
+        var visitedDeviceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            startingNode.DeviceId
+        };
+        var nodesToVisit = new Queue<string>();
+        var reachableNodes = new List<MeshNetworkNode>();
+
+        nodesToVisit.Enqueue(startingNode.DeviceId);
+
+        while (nodesToVisit.Count > 0)
+        {
+            var currentDeviceId = nodesToVisit.Dequeue();
+            var currentNode = nodesById[currentDeviceId];
+            reachableNodes.Add(currentNode);
+
+            foreach (var neighbour in GetActiveNeighbours(currentDeviceId))
+            {
+                if (visitedDeviceIds.Add(neighbour.DeviceId))
+                {
+                    nodesToVisit.Enqueue(neighbour.DeviceId);
+                }
+            }
+        }
+
+        return reachableNodes;
+    }
 }
