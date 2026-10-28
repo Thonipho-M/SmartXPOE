@@ -1,0 +1,122 @@
+@page "/network-topology"
+@inject SmartX.Client.Services.SensorApiClient SensorApi
+@* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
+
+<PageTitle>Network Topology</PageTitle>
+
+<div class="py-4">
+    <p class="text-uppercase text-primary fw-semibold mb-2">Final POE workspace</p>
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+        <div>
+            <h1>Network Topology and Mesh Routing</h1>
+            <p class="lead text-secondary mb-0">Explore the active Smart-X mesh by device ID or MAC address, then inspect its wireless connections.</p>
+        </div>
+        <button class="btn btn-outline-primary" @onclick="LoadTopologyAsync" disabled="@isLoading">Refresh topology</button>
+    </div>
+
+    @if (errorMessage is not null)
+    {
+        <div class="alert alert-danger" role="alert">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="text-secondary">Loading mesh network…</p>
+    }
+    else
+    {
+        <section class="row g-3 mb-4" aria-label="Network summary">
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100"><div class="card-body"><span class="text-secondary">Mesh nodes</span><div class="display-6">@topology.Nodes.Count</div></div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100"><div class="card-body"><span class="text-secondary">Online nodes</span><div class="display-6 text-success">@topology.Nodes.Count(node => node.IsOnline)</div></div></div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100"><div class="card-body"><span class="text-secondary">Wireless links</span><div class="display-6">@topology.Links.Count(link => link.IsActive)</div></div></div>
+            </div>
+        </section>
+
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h4">Find a mesh device</h2>
+                <p class="text-secondary">Search by Smart-X device ID, unique MAC address, location, or node role.</p>
+                <input class="form-control" @bind="searchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
+            </div>
+        </section>
+
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h4">Active mesh devices</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Device</th><th>MAC address</th><th>Role</th><th>Location</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var node in FilteredNodes)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@node.DeviceId</td>
+                                    <td><code>@node.MacAddress</code></td>
+                                    <td>@node.Role</td>
+                                    <td>@node.Location</td>
+                                    <td><span class="badge @(node.IsOnline ? "text-bg-success" : "text-bg-secondary")">@(node.IsOnline ? "Online" : "Offline")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h4">Wireless mesh connections</h2>
+                <p class="text-secondary">Lower routing cost means a more power-efficient hop.</p>
+                <ul class="list-group list-group-flush">
+                    @foreach (var link in topology.Links)
+                    {
+                        <li class="list-group-item d-flex justify-content-between gap-3 flex-wrap">
+                            <span><strong>@link.FromDeviceId</strong> ↔ <strong>@link.ToDeviceId</strong></span>
+                            <span class="text-secondary">Cost: @link.RoutingCost · @(link.IsActive ? "Active" : "Unavailable")</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private NetworkTopologySnapshot topology = new();
+    private bool isLoading = true;
+    private string searchText = string.Empty;
+    private string? errorMessage;
+
+    private IEnumerable<MeshNetworkNode> FilteredNodes => topology.Nodes.Where(node =>
+        string.IsNullOrWhiteSpace(searchText) ||
+        node.DeviceId.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+        node.MacAddress.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+        node.Location.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+        node.Role.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase));
+
+    protected override Task OnInitializedAsync() => LoadTopologyAsync();
+
+    private async Task LoadTopologyAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            topology = await SensorApi.GetNetworkTopologyAsync();
+        }
+        catch
+        {
+            errorMessage = "The network topology could not be loaded. Start the Smart-X API and try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
