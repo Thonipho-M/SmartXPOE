@@ -36,6 +36,46 @@ public class SensorApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<List<TelemetryAlert>>("api/alerts", JsonOptions) ?? [];
     }
 
+    public async Task<NetworkTopologySnapshot> GetNetworkTopologyAsync()
+    {
+        return await httpClient.GetFromJsonAsync<NetworkTopologySnapshot>(
+            "api/network/topology", JsonOptions) ?? new NetworkTopologySnapshot();
+    }
+
+    public async Task<NetworkConnectivityReport> GetNetworkConnectivityAsync(string startingDeviceId)
+    {
+        return await httpClient.GetFromJsonAsync<NetworkConnectivityReport>(
+            $"api/network/connectivity/{Uri.EscapeDataString(startingDeviceId)}", JsonOptions)
+            ?? new NetworkConnectivityReport { StartingDeviceId = startingDeviceId };
+    }
+
+    public async Task<MinimumSpanningTreeResult> GetMinimumSpanningTreeAsync(string startingDeviceId)
+    {
+        return await httpClient.GetFromJsonAsync<MinimumSpanningTreeResult>(
+            $"api/network/minimum-spanning-tree/{Uri.EscapeDataString(startingDeviceId)}", JsonOptions)
+            ?? new MinimumSpanningTreeResult { StartingDeviceId = startingDeviceId };
+    }
+
+    public Task<HttpResponseMessage> UpdateMeshNodeStatusAsync(string deviceId, bool isOnline)
+    {
+        return httpClient.PutAsJsonAsync(
+            $"api/network/nodes/{Uri.EscapeDataString(deviceId)}/status",
+            new MeshNodeStatusUpdate { IsOnline = isOnline },
+            JsonOptions);
+    }
+
+    public async Task<List<CommandStreamTelemetry>> GetTelemetryRangeAsync(
+        string deviceId,
+        DateTime fromUtc,
+        DateTime toUtc)
+    {
+        var from = Uri.EscapeDataString(fromUtc.ToUniversalTime().ToString("O"));
+        var to = Uri.EscapeDataString(toUtc.ToUniversalTime().ToString("O"));
+
+        return await httpClient.GetFromJsonAsync<List<CommandStreamTelemetry>>(
+            $"api/telemetry/{Uri.EscapeDataString(deviceId)}/range?fromUtc={from}&toUtc={to}",
+            JsonOptions) ?? [];
+    }
     public async Task<List<CommandStreamTelemetry>> GetLiveCommandStreamAsync()
     {
         return await httpClient.GetFromJsonAsync<List<CommandStreamTelemetry>>(
