@@ -39,6 +39,54 @@
 
         <section class="card shadow-sm mb-4">
             <div class="card-body">
+                <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Mesh connectivity check</h2>
+                        <p class="text-secondary mb-0">BFS follows active links from the selected node to reveal reachable, isolated, and offline devices.</p>
+                    </div>
+                    <button class="btn btn-primary" @onclick="LoadConnectivityAsync" disabled="@isCheckingConnectivity">Analyse connectivity</button>
+                </div>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label" for="startingNode">Starting node</label>
+                        <select id="startingNode" class="form-select" @bind="startingDeviceId">
+                            @foreach (var node in topology.Nodes.Where(node => node.IsOnline))
+                            {
+                                <option value="@node.DeviceId">@node.DeviceId (@node.Role)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="simulationNode">Failure simulation</label>
+                        <div class="input-group">
+                            <select id="simulationNode" class="form-select" @bind="simulationDeviceId">
+                                @foreach (var node in topology.Nodes.Where(node => node.Role != MeshNodeRole.Gateway))
+                                {
+                                    <option value="@node.DeviceId">@node.DeviceId — @(node.IsOnline ? "Online" : "Offline")</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-danger" @onclick="ToggleSelectedNodeAsync" disabled="@isUpdatingNode">Toggle status</button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (connectivityMessage is not null)
+                {
+                    <div class="alert alert-info mt-3 mb-0">@connectivityMessage</div>
+                }
+
+                @if (connectivityReport is not null)
+                {
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block text-success">Reachable</strong><span class="display-6">@connectivityReport.ReachableNodes.Count</span><small class="d-block text-secondary">Devices reached by BFS</small></div></div>
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block text-warning">Isolated online</strong><span class="display-6">@connectivityReport.UnreachableOnlineNodes.Count</span><small class="d-block text-secondary">Online but no route found</small></div></div>
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block text-secondary">Offline</strong><span class="display-6">@connectivityReport.OfflineNodes.Count</span><small class="d-block text-secondary">Simulated or unavailable nodes</small></div></div>
+                    </div>
+                }
+            </div>
+        </section>
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
                 <h2 class="h4">Find a mesh device</h2>
                 <p class="text-secondary">Search by Smart-X device ID, unique MAC address, location, or node role.</p>
                 <input class="form-control" @bind="searchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
@@ -91,6 +139,12 @@
     private bool isLoading = true;
     private string searchText = string.Empty;
     private string? errorMessage;
+    private NetworkConnectivityReport? connectivityReport;
+    private string startingDeviceId = "SMARTX-GATEWAY-01";
+    private string simulationDeviceId = "FARM-PUMP-01";
+    private bool isCheckingConnectivity;
+    private bool isUpdatingNode;
+    private string? connectivityMessage;
 
     private IEnumerable<MeshNetworkNode> FilteredNodes => topology.Nodes.Where(node =>
         string.IsNullOrWhiteSpace(searchText) ||
@@ -117,6 +171,67 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private async Task LoadConnectivityAsync()
+    {
+        isCheckingConnectivity = true;
+        connectivityMessage = null;
+
+        try
+        {
+            connectivityReport = await SensorApi.GetNetworkConnectivityAsync(startingDeviceId);
+        }
+        catch
+        {
+            connectivityMessage = "The connectivity report could not be loaded. Start the Smart-X API and try again.";
+        }
+        finally
+        {
+            isCheckingConnectivity = false;
+        }
+    }
+
+    private async Task ToggleSelectedNodeAsync()
+    {
+        var selectedNode = topology.Nodes.FirstOrDefault(node =>
+            node.DeviceId.Equals(simulationDeviceId, StringComparison.OrdinalIgnoreCase));
+
+        if (selectedNode is null)
+        {
+            connectivityMessage = "Choose a valid mesh node before running the simulation.";
+            return;
+        }
+
+        isUpdatingNode = true;
+        connectivityMessage = null;
+
+        try
+        {
+            using var response = await SensorApi.UpdateMeshNodeStatusAsync(
+                selectedNode.DeviceId,
+                !selectedNode.IsOnline);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                connectivityMessage = "The node status could not be updated.";
+                return;
+            }
+
+            connectivityMessage = selectedNode.IsOnline
+                ? $"{selectedNode.DeviceId} is now offline. Run BFS to inspect the remaining routes."
+                : $"{selectedNode.DeviceId} is back online.";
+            await LoadTopologyAsync();
+            await LoadConnectivityAsync();
+        }
+        catch
+        {
+            connectivityMessage = "The node simulation could not be completed. Start the Smart-X API and try again.";
+        }
+        finally
+        {
+            isUpdatingNode = false;
         }
     }
 }
