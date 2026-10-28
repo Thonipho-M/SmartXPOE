@@ -284,6 +284,23 @@ commandStream.UpdateCriticalAlerts(TelemetryAlertEvaluator.Evaluate(
 var telemetry = app.MapGroup("/api/telemetry")
     .WithTags("Telemetry");
 
+// A Binary Search Tree retrieves only the readings inside the selected timestamp range.
+telemetry.MapGet("/{deviceId}/range", (string deviceId, DateTime fromUtc, DateTime toUtc) =>
+{
+    if (!liveDeviceRegistry.ContainsDevice(deviceId))
+    {
+        return Results.NotFound(new { message = "The requested sensor is not registered." });
+    }
+
+    if (fromUtc > toUtc)
+    {
+        return Results.BadRequest(new { message = "The start time must be before the end time." });
+    }
+
+    return Results.Ok(telemetryRangeSearchTree.GetRange(deviceId, fromUtc, toUtc));
+})
+.WithName("GetTelemetryRange");
+
 app.MapPost("/api/simulation/tick", () =>
 {
     RunSimulationTick();
