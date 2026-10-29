@@ -39,6 +39,29 @@
 
         <section class="card shadow-sm mb-4">
             <div class="card-body">
+                <h2 class="h4">Active mesh map</h2>
+                <p class="text-secondary">Each line represents a wireless hop. Link labels show the routing cost used by the connectivity and routing algorithms.</p>
+                <div class="table-responsive">
+                    <svg viewBox="0 0 720 340" role="img" aria-label="Smart-X mesh network topology" style="min-width: 680px; background: #f8f6ee;">
+                        @foreach (var link in topology.Links)
+                        {
+                            var from = GetMeshPosition(link.FromDeviceId);
+                            var to = GetMeshPosition(link.ToDeviceId);
+                            <line x1="@from.X" y1="@from.Y" x2="@to.X" y2="@to.Y" stroke="@(link.IsActive ? "#8b6f47" : "#9ca3af")" stroke-width="3"><title>Routing cost: @link.RoutingCost</title></line>
+                        }
+                        @foreach (var node in topology.Nodes)
+                        {
+                            var point = GetMeshPosition(node.DeviceId);
+                            var fill = node.IsOnline ? "#2f6b3b" : "#6b7280";
+                            <circle cx="@point.X" cy="@point.Y" r="@(node.Role == MeshNodeRole.Gateway ? 21 : 16)" fill="@fill"><title>@node.DeviceId · @node.Role · @(node.IsOnline ? "Online" : "Offline")</title></circle>
+                        }
+                    </svg>
+                </div>
+                <p class="small text-secondary mb-0 mt-2">Green = online · Grey = offline · Hover or focus a line for its routing cost.</p>
+            </div>
+        </section>
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
                 <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
                     <div>
                         <h2 class="h4 mb-1">Mesh connectivity check</h2>
@@ -380,4 +403,18 @@
             isLoadingHistory = false;
         }
     }
+
+    private static (int X, int Y) GetMeshPosition(string deviceId) => deviceId switch
+    {
+        "SMARTX-GATEWAY-01" => (360, 45),
+        "FARM-PUMP-01" => (180, 120),
+        "GRID-RELAY-01" => (540, 120),
+        "GREENHOUSE-HUMID-01" => (650, 210),
+        "FARM-VALVE-01" => (100, 220),
+        "FARM-MOIST-01" => (220, 290),
+        "FARM-TEMP-02" => (300, 220),
+        "FARM-PH-01" => (360, 300),
+        "GRID-METER-01" => (500, 250),
+        _ => (360, 170)
+    };
 }
