@@ -87,6 +87,42 @@
         </section>
         <section class="card shadow-sm mb-4">
             <div class="card-body">
+                <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Power-efficient routing plan</h2>
+                        <p class="text-secondary mb-0">Prim's algorithm uses a priority queue to select the lowest-cost active mesh links.</p>
+                    </div>
+                    <button class="btn btn-success" @onclick="LoadMinimumSpanningTreeAsync" disabled="@isCalculatingTree">Calculate efficient route</button>
+                </div>
+
+                @if (treeMessage is not null)
+                {
+                    <div class="alert alert-info">@treeMessage</div>
+                }
+
+                @if (minimumSpanningTree is not null)
+                {
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block text-success">Total routing cost</strong><span class="display-6">@minimumSpanningTree.TotalRoutingCost</span><small class="d-block text-secondary">Lower cost is more power-efficient</small></div></div>
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block">Selected hops</strong><span class="display-6">@minimumSpanningTree.SelectedLinks.Count</span><small class="d-block text-secondary">Links used by the MST</small></div></div>
+                        <div class="col-md-4"><div class="border rounded p-3 h-100"><strong class="d-block text-warning">Unconnected online nodes</strong><span class="display-6">@minimumSpanningTree.UnconnectedDeviceIds.Count</span><small class="d-block text-secondary">No active route to the tree</small></div></div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>From</th><th>To</th><th>Routing cost</th></tr></thead>
+                            <tbody>
+                                @foreach (var link in minimumSpanningTree.SelectedLinks)
+                                {
+                                    <tr><td>@link.FromDeviceId</td><td>@link.ToDeviceId</td><td>@link.RoutingCost</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
                 <h2 class="h4">Find a mesh device</h2>
                 <p class="text-secondary">Search by Smart-X device ID, unique MAC address, location, or node role.</p>
                 <input class="form-control" @bind="searchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
@@ -145,6 +181,9 @@
     private bool isCheckingConnectivity;
     private bool isUpdatingNode;
     private string? connectivityMessage;
+    private MinimumSpanningTreeResult? minimumSpanningTree;
+    private bool isCalculatingTree;
+    private string? treeMessage;
 
     private IEnumerable<MeshNetworkNode> FilteredNodes => topology.Nodes.Where(node =>
         string.IsNullOrWhiteSpace(searchText) ||
@@ -232,6 +271,26 @@
         finally
         {
             isUpdatingNode = false;
+        }
+    }
+
+    private async Task LoadMinimumSpanningTreeAsync()
+    {
+        isCalculatingTree = true;
+        treeMessage = null;
+
+        try
+        {
+            minimumSpanningTree = await SensorApi.GetMinimumSpanningTreeAsync(startingDeviceId);
+            treeMessage = $"Efficient route calculated from {minimumSpanningTree.StartingDeviceId}.";
+        }
+        catch
+        {
+            treeMessage = "The routing plan could not be calculated. Start the Smart-X API and try again.";
+        }
+        finally
+        {
+            isCalculatingTree = false;
         }
     }
 }
