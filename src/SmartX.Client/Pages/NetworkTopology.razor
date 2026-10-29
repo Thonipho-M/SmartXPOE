@@ -123,6 +123,56 @@
         </section>
         <section class="card shadow-sm mb-4">
             <div class="card-body">
+                <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Historical telemetry range</h2>
+                        <p class="text-secondary mb-0">Query timestamped data efficiently with the Binary Search Tree.</p>
+                    </div>
+                    <button class="btn btn-outline-primary" @onclick="LoadTelemetryRangeAsync" disabled="@isLoadingHistory">Find readings</button>
+                </div>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label" for="historyDevice">Device</label>
+                        <select id="historyDevice" class="form-select" @bind="historyDeviceId">
+                            @foreach (var node in topology.Nodes.Where(node => node.Role != MeshNodeRole.Gateway))
+                            {
+                                <option value="@node.DeviceId">@node.DeviceId</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="historyStart">From</label>
+                        <input id="historyStart" class="form-control" type="datetime-local" @bind="historyStartUtc" @bind:format="yyyy-MM-ddTHH:mm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="historyEnd">To</label>
+                        <input id="historyEnd" class="form-control" type="datetime-local" @bind="historyEndUtc" @bind:format="yyyy-MM-ddTHH:mm" />
+                    </div>
+                </div>
+
+                @if (historyMessage is not null)
+                {
+                    <div class="alert alert-info mt-3 mb-0">@historyMessage</div>
+                }
+
+                @if (historyReadings.Count > 0)
+                {
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Timestamp</th><th>Metric</th><th>Value</th><th>Value type</th></tr></thead>
+                            <tbody>
+                                @foreach (var reading in historyReadings)
+                                {
+                                    <tr><td>@reading.RecordedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td><td>@reading.MetricName</td><td>@reading.Value</td><td>@reading.ValueType</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+        <section class="card shadow-sm mb-4">
+            <div class="card-body">
                 <h2 class="h4">Find a mesh device</h2>
                 <p class="text-secondary">Search by Smart-X device ID, unique MAC address, location, or node role.</p>
                 <input class="form-control" @bind="searchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
@@ -184,6 +234,12 @@
     private MinimumSpanningTreeResult? minimumSpanningTree;
     private bool isCalculatingTree;
     private string? treeMessage;
+    private string historyDeviceId = "FARM-MOIST-01";
+    private DateTime historyStartUtc = DateTime.UtcNow.AddHours(-4);
+    private DateTime historyEndUtc = DateTime.UtcNow;
+    private List<CommandStreamTelemetry> historyReadings = [];
+    private bool isLoadingHistory;
+    private string? historyMessage;
 
     private IEnumerable<MeshNetworkNode> FilteredNodes => topology.Nodes.Where(node =>
         string.IsNullOrWhiteSpace(searchText) ||
@@ -291,6 +347,37 @@
         finally
         {
             isCalculatingTree = false;
+        }
+    }
+
+    private async Task LoadTelemetryRangeAsync()
+    {
+        if (historyStartUtc > historyEndUtc)
+        {
+            historyMessage = "Choose a start time that is before the end time.";
+            historyReadings = [];
+            return;
+        }
+
+        isLoadingHistory = true;
+        historyMessage = null;
+
+        try
+        {
+            historyReadings = await SensorApi.GetTelemetryRangeAsync(
+                historyDeviceId,
+                historyStartUtc,
+                historyEndUtc);
+            historyMessage = $"{historyReadings.Count} reading(s) returned from the timestamp search tree.";
+        }
+        catch
+        {
+            historyReadings = [];
+            historyMessage = "The historical query could not be loaded. Start the Smart-X API and try again.";
+        }
+        finally
+        {
+            isLoadingHistory = false;
         }
     }
 }
