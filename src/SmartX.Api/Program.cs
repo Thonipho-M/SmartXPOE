@@ -274,12 +274,13 @@ foreach (var packet in booleanTelemetry)
     commandStream.EnqueueTelemetry(packet);
 }
 
-commandStream.UpdateCriticalAlerts(TelemetryAlertEvaluator.Evaluate(
+commandStream.UpdateAlertPriorities(TelemetryAlertEvaluator.Evaluate(
     registeredSensors,
     floatTelemetry,
     integerTelemetry,
     booleanTelemetry,
     DateTime.UtcNow));
+commandStream.ProcessQueuedTelemetry();
 
 var telemetry = app.MapGroup("/api/telemetry")
     .WithTags("Telemetry");
@@ -510,12 +511,15 @@ IResult StoreTelemetryPacket<T>(TelemetryPacket<T> packet, List<TelemetryPacket<
     telemetryRangeSearchTree.Add(packet);
     packetList.Add(packet);
 
-    commandStream.UpdateCriticalAlerts(TelemetryAlertEvaluator.Evaluate(
+    // Alert priorities are refreshed before the normal FIFO queue is consumed.
+    // This allows a critical condition to reach the priority lane immediately.
+    commandStream.UpdateAlertPriorities(TelemetryAlertEvaluator.Evaluate(
         registeredSensors,
         floatTelemetry,
         integerTelemetry,
         booleanTelemetry,
         DateTime.UtcNow));
+    commandStream.ProcessQueuedTelemetry();
 
     return Results.Created($"/api/telemetry/{packet.DeviceId}", packet);
 }
