@@ -1,12 +1,13 @@
 @page "/command-stream"
 @inject SmartX.Client.Services.SensorApiClient SensorApi
+@inject SmartX.Client.Services.SmartXWorkspaceState WorkspaceState
 @implements IAsyncDisposable
 @* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
 
 <PageTitle>Real-Time Command Stream</PageTitle>
 
 <div class="py-4">
-    <p class="text-uppercase text-primary fw-semibold mb-2">Part 2 workspace</p>
+    <p class="text-uppercase text-primary fw-semibold mb-2">Smart-X control centre</p>
     <h1>Real-Time Command Stream and History</h1>
     <p class="lead text-secondary">Monitor incoming telemetry, focus on active device issues, and issue reversible actuator commands.</p>
 
@@ -31,7 +32,7 @@
             <div class="row g-3 align-items-end">
                 <div class="col-md-6">
                     <label class="form-label" for="categoryFilter">Operational category</label>
-                    <InputSelect id="categoryFilter" class="form-select" @bind-Value="selectedCategory">
+                        <InputSelect id="categoryFilter" class="form-select" @bind-Value="WorkspaceState.SelectedCategory">
                         <option value="">All categories</option>
                         @foreach (var category in Enum.GetValues<SensorCategory>())
                         {
@@ -41,7 +42,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-check mb-2">
-                        <InputCheckbox id="activeAlertFilter" class="form-check-input" @bind-Value="activeAlertsOnly" />
+                        <InputCheckbox id="activeAlertFilter" class="form-check-input" @bind-Value="WorkspaceState.ActiveAlertsOnly" />
                         <label class="form-check-label" for="activeAlertFilter">Show devices with active alerts only</label>
                     </div>
                 </div>
@@ -252,15 +253,15 @@
                     <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
                         <div>
                             <h2 class="h4 mb-1">Timestamp-sorted history</h2>
-                            <p class="text-secondary mb-0">@selectedDeviceId</p>
+                            <p class="text-secondary mb-0">@WorkspaceState.SelectedDeviceId</p>
                         </div>
-                        <InputSelect class="form-select w-auto" @bind-Value="selectedDeviceId">
+                        <InputSelect class="form-select w-auto" @bind-Value="WorkspaceState.SelectedDeviceId">
                             @foreach (var sensor in registeredSensors)
                             {
                                 <option value="@sensor.DeviceId">@sensor.DeviceId</option>
                             }
                         </InputSelect>
-                        <button class="btn btn-outline-primary" @onclick="LoadSelectedHistoryAsync" disabled="@string.IsNullOrWhiteSpace(selectedDeviceId)">Load history</button>
+                        <button class="btn btn-outline-primary" @onclick="LoadSelectedHistoryAsync" disabled="@string.IsNullOrWhiteSpace(WorkspaceState.SelectedDeviceId)">Load history</button>
                     </div>
 
                     @if (selectedHistory.Count == 0)
@@ -296,9 +297,6 @@
     private List<ManualOverrideCommand> overrideHistory = [];
     private List<CommandStreamTelemetry> selectedHistory = [];
     private ManualOverrideRequest newOverride = new() { Command = "Open valve", TargetState = "On" };
-    private string selectedCategory = string.Empty;
-    private bool activeAlertsOnly;
-    private string selectedDeviceId = string.Empty;
     private string? message;
     private string messageStyle = "alert-info";
     private readonly CancellationTokenSource refreshCancellation = new();
@@ -311,8 +309,8 @@
     }
 
     private IEnumerable<SensorProfile> FilteredSensors => registeredSensors.Where(sensor =>
-        (string.IsNullOrWhiteSpace(selectedCategory) || sensor.Category.ToString() == selectedCategory) &&
-        (!activeAlertsOnly || HasActiveAlert(sensor.DeviceId)));
+        (string.IsNullOrWhiteSpace(WorkspaceState.SelectedCategory) || sensor.Category.ToString() == WorkspaceState.SelectedCategory) &&
+        (!WorkspaceState.ActiveAlertsOnly || HasActiveAlert(sensor.DeviceId)));
 
     private bool HasActiveAlert(string deviceId) => activeAlerts.Any(alert =>
         alert.DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
@@ -329,9 +327,9 @@
             predictiveInsights = await SensorApi.GetPredictiveInsightsAsync();
             overrideHistory = await SensorApi.GetManualOverrideHistoryAsync();
 
-            if (string.IsNullOrWhiteSpace(selectedDeviceId) && registeredSensors.Count > 0)
+            if (string.IsNullOrWhiteSpace(WorkspaceState.SelectedDeviceId) && registeredSensors.Count > 0)
             {
-                selectedDeviceId = registeredSensors[0].DeviceId;
+                WorkspaceState.SelectedDeviceId = registeredSensors[0].DeviceId;
                 await LoadSelectedHistoryAsync();
             }
         }
@@ -368,14 +366,14 @@
 
     private async Task SelectDeviceAsync(string deviceId)
     {
-        selectedDeviceId = deviceId;
+        WorkspaceState.SelectedDeviceId = deviceId;
         await SensorApi.RecordDeviceSearchAsync(deviceId);
         await LoadSelectedHistoryAsync();
     }
 
     private async Task InvestigateInsightAsync(PredictiveInsight insight)
     {
-        selectedDeviceId = insight.DeviceId;
+        WorkspaceState.SelectedDeviceId = insight.DeviceId;
         await SensorApi.RecordDeviceSearchAsync(insight.DeviceId);
         await LoadSelectedHistoryAsync();
     }
@@ -401,14 +399,14 @@
 
     private async Task LoadSelectedHistoryAsync()
     {
-        if (string.IsNullOrWhiteSpace(selectedDeviceId))
+        if (string.IsNullOrWhiteSpace(WorkspaceState.SelectedDeviceId))
         {
             return;
         }
 
         try
         {
-            selectedHistory = await SensorApi.GetSortedCommandHistoryAsync(selectedDeviceId);
+            selectedHistory = await SensorApi.GetSortedCommandHistoryAsync(WorkspaceState.SelectedDeviceId);
         }
         catch (HttpRequestException)
         {

@@ -1,11 +1,12 @@
 @page "/network-topology"
 @inject SmartX.Client.Services.SensorApiClient SensorApi
+@inject SmartX.Client.Services.SmartXWorkspaceState WorkspaceState
 @* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
 
 <PageTitle>Network Topology</PageTitle>
 
 <div class="py-4">
-    <p class="text-uppercase text-primary fw-semibold mb-2">Final POE workspace</p>
+    <p class="text-uppercase text-primary fw-semibold mb-2">Smart-X network operations</p>
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
         <div>
             <h1>Network Topology and Mesh Routing</h1>
@@ -72,7 +73,7 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-md-6">
                         <label class="form-label" for="startingNode">Starting node</label>
-                        <select id="startingNode" class="form-select" @bind="startingDeviceId">
+                        <select id="startingNode" class="form-select" @bind="WorkspaceState.StartingMeshNodeId">
                             @foreach (var node in topology.Nodes.Where(node => node.IsOnline))
                             {
                                 <option value="@node.DeviceId">@node.DeviceId (@node.Role)</option>
@@ -198,7 +199,7 @@
             <div class="card-body">
                 <h2 class="h4">Find a mesh device</h2>
                 <p class="text-secondary">Search by Smart-X device ID, unique MAC address, location, or node role.</p>
-                <input class="form-control" @bind="searchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
+                <input class="form-control" @bind="WorkspaceState.TopologySearchText" placeholder="Example: FARM-MOIST-01 or AA:BB:CC:00:00:01" />
             </div>
         </section>
 
@@ -246,10 +247,8 @@
 @code {
     private NetworkTopologySnapshot topology = new();
     private bool isLoading = true;
-    private string searchText = string.Empty;
     private string? errorMessage;
     private NetworkConnectivityReport? connectivityReport;
-    private string startingDeviceId = "SMARTX-GATEWAY-01";
     private string simulationDeviceId = "FARM-PUMP-01";
     private bool isCheckingConnectivity;
     private bool isUpdatingNode;
@@ -265,11 +264,11 @@
     private string? historyMessage;
 
     private IEnumerable<MeshNetworkNode> FilteredNodes => topology.Nodes.Where(node =>
-        string.IsNullOrWhiteSpace(searchText) ||
-        node.DeviceId.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-        node.MacAddress.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-        node.Location.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-        node.Role.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase));
+        string.IsNullOrWhiteSpace(WorkspaceState.TopologySearchText) ||
+        node.DeviceId.Contains(WorkspaceState.TopologySearchText, StringComparison.OrdinalIgnoreCase) ||
+        node.MacAddress.Contains(WorkspaceState.TopologySearchText, StringComparison.OrdinalIgnoreCase) ||
+        node.Location.Contains(WorkspaceState.TopologySearchText, StringComparison.OrdinalIgnoreCase) ||
+        node.Role.ToString().Contains(WorkspaceState.TopologySearchText, StringComparison.OrdinalIgnoreCase));
 
     protected override Task OnInitializedAsync() => LoadTopologyAsync();
 
@@ -299,7 +298,7 @@
 
         try
         {
-            connectivityReport = await SensorApi.GetNetworkConnectivityAsync(startingDeviceId);
+            connectivityReport = await SensorApi.GetNetworkConnectivityAsync(WorkspaceState.StartingMeshNodeId);
         }
         catch
         {
@@ -360,7 +359,7 @@
 
         try
         {
-            minimumSpanningTree = await SensorApi.GetMinimumSpanningTreeAsync(startingDeviceId);
+            minimumSpanningTree = await SensorApi.GetMinimumSpanningTreeAsync(WorkspaceState.StartingMeshNodeId);
             treeMessage = $"Efficient route calculated from {minimumSpanningTree.StartingDeviceId}.";
         }
         catch

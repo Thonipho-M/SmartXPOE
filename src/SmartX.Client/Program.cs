@@ -12,5 +12,6 @@ builder.Services.AddScoped(_ => new SensorApiClient(new HttpClient
 {
     BaseAddress = new Uri("http://localhost:5145/")
 }));
+builder.Services.AddScoped<SmartXWorkspaceState>();
 
 await builder.Build().RunAsync();

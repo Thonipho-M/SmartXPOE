@@ -1,11 +1,12 @@
 @page "/telemetry"
 @inject SmartX.Client.Services.SensorApiClient SensorApi
+@inject SmartX.Client.Services.SmartXWorkspaceState WorkspaceState
 @* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
 
 <PageTitle>Telemetry Workspace</PageTitle>
 
 <div class="py-4">
-    <p class="text-uppercase text-primary fw-semibold mb-2">Part 1 workspace</p>
+    <p class="text-uppercase text-primary fw-semibold mb-2">Smart-X monitoring</p>
     <h1>Sensor Data Ingestion and Telemetry</h1>
     <p class="lead text-secondary">
         Register a sensor before sending its telemetry to Smart-X.
@@ -272,7 +273,11 @@
     private TelemetryHistory? selectedHistory;
     private List<SensorAttachment> attachments = [];
     private IBrowserFile? selectedAttachmentFile;
-    private string selectedDeviceId = string.Empty;
+    private string selectedDeviceId
+    {
+        get => WorkspaceState.SelectedDeviceId;
+        set => WorkspaceState.SelectedDeviceId = value;
+    }
     private string selectedMetric = string.Empty;
     private string? selectedPacketDetails;
     private string? message;
