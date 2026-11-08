@@ -137,6 +137,10 @@
                             <div class="alert alert-danger py-2">
                                 <strong>@alert.DeviceId</strong>
                                 <div>@alert.Message</div>
+                                @if (alert.OccurrenceCount > 1)
+                                {
+                                    <small class="d-block">Repeated detection count: @alert.OccurrenceCount</small>
+                                }
                                 <small>@alert.SuggestedAction</small>
                                 @if (recommendedControl is not null)
                                 {

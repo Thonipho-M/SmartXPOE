@@ -31,6 +31,10 @@
                         <div>
                             <strong>@alert.DeviceId - @alert.MetricName</strong>
                             <div>@alert.Message</div>
+                            @if (alert.OccurrenceCount > 1)
+                            {
+                                <small class="d-block mt-1">Repeated detection count: @alert.OccurrenceCount</small>
+                            }
                         </div>
                         <button class="btn btn-sm btn-outline-dark ms-3" @onclick="() => InvestigateAlertAsync(alert)">Investigate</button>
                     </div>

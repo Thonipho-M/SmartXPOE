@@ -22,6 +22,7 @@ builder.Services.AddSingleton<OperatorActivityTracker>();
 builder.Services.AddSingleton<PredictiveRecommendationEngine>();
 builder.Services.AddSingleton<TelemetrySimulationState>();
 builder.Services.AddSingleton<MeshNetworkGraph>();
+builder.Services.AddSingleton<ActiveAlertStateStore>();
 
 var app = builder.Build();
 
@@ -47,6 +48,7 @@ var activityTracker = app.Services.GetRequiredService<OperatorActivityTracker>()
 var recommendationEngine = app.Services.GetRequiredService<PredictiveRecommendationEngine>();
 var telemetrySimulation = app.Services.GetRequiredService<TelemetrySimulationState>();
 var meshNetwork = app.Services.GetRequiredService<MeshNetworkGraph>();
+var activeAlertStates = app.Services.GetRequiredService<ActiveAlertStateStore>();
 
 // This list is temporary storage for Part 1. It is cleared when the API stops.
 var registeredSensors = new List<SensorProfile>();
@@ -274,12 +276,13 @@ foreach (var packet in booleanTelemetry)
     commandStream.EnqueueTelemetry(packet);
 }
 
-commandStream.UpdateAlertPriorities(TelemetryAlertEvaluator.Evaluate(
+var initialActiveAlerts = activeAlertStates.Synchronize(TelemetryAlertEvaluator.Evaluate(
     registeredSensors,
     floatTelemetry,
     integerTelemetry,
     booleanTelemetry,
     DateTime.UtcNow));
+commandStream.UpdateAlertPriorities(initialActiveAlerts);
 commandStream.ProcessQueuedTelemetry();
 
 var telemetry = app.MapGroup("/api/telemetry")
@@ -319,12 +322,7 @@ app.MapPost("/api/deployments/validate", (DeploymentConfiguration configuration)
 .WithTags("Deployments")
 .WithName("ValidateDeploymentConfiguration");
 
-app.MapGet("/api/alerts", () => Results.Ok(TelemetryAlertEvaluator.Evaluate(
-    registeredSensors,
-    floatTelemetry,
-    integerTelemetry,
-    booleanTelemetry,
-    DateTime.UtcNow)))
+app.MapGet("/api/alerts", () => Results.Ok(activeAlertStates.GetActiveAlerts()))
     .WithTags("Alerts")
     .WithName("GetTelemetryAlerts");
 
@@ -351,14 +349,7 @@ recommendationEndpoints.MapGet("/activity", () => Results.Ok(activityTracker.Get
 
 recommendationEndpoints.MapGet("/insights", () =>
 {
-    var activeAlerts = TelemetryAlertEvaluator.Evaluate(
-        registeredSensors,
-        floatTelemetry,
-        integerTelemetry,
-        booleanTelemetry,
-        DateTime.UtcNow);
-
-    return Results.Ok(recommendationEngine.Generate(activeAlerts, registeredSensors));
+    return Results.Ok(recommendationEngine.Generate(activeAlertStates.GetActiveAlerts(), registeredSensors));
 })
 .WithName("GetPredictiveInsights");
 
@@ -513,12 +504,13 @@ IResult StoreTelemetryPacket<T>(TelemetryPacket<T> packet, List<TelemetryPacket<
 
     // Alert priorities are refreshed before the normal FIFO queue is consumed.
     // This allows a critical condition to reach the priority lane immediately.
-    commandStream.UpdateAlertPriorities(TelemetryAlertEvaluator.Evaluate(
+    var activeAlerts = activeAlertStates.Synchronize(TelemetryAlertEvaluator.Evaluate(
         registeredSensors,
         floatTelemetry,
         integerTelemetry,
         booleanTelemetry,
         DateTime.UtcNow));
+    commandStream.UpdateAlertPriorities(activeAlerts);
     commandStream.ProcessQueuedTelemetry();
 
     return Results.Created($"/api/telemetry/{packet.DeviceId}", packet);

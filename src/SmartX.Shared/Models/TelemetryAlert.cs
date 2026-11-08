@@ -9,4 +9,7 @@ public class TelemetryAlert
     public string Message { get; init; } = string.Empty;
     public string SuggestedAction { get; init; } = string.Empty;
     public DateTime DetectedAtUtc { get; init; } = DateTime.UtcNow;
+
+    // Counts repeated detections while the same alert remains active.
+    public int OccurrenceCount { get; init; } = 1;
 }
