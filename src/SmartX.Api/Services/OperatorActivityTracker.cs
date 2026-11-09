@@ -7,9 +7,9 @@ public sealed class OperatorActivityTracker
     private const int MaximumActivityEvents = 50;
     private readonly object syncRoot = new();
     private readonly Queue<OperatorActivity> recentActivities = new();
-    private readonly Dictionary<string, Dictionary<string, int>> followUpCounts =
+    private readonly Dictionary<string, Dictionary<string, FollowUpPatternStats>> followUpPatterns =
         new(StringComparer.OrdinalIgnoreCase);
-    private string? previousDeviceId;
+    private OperatorActivity? previousActivity;
 
     public void RecordSearch(string deviceId)
     {
@@ -18,7 +18,7 @@ public sealed class OperatorActivityTracker
 
     public void RecordManualOverride(ManualOverrideCommand command)
     {
-        Record(command.DeviceId, OperatorActivityKind.ManualOverride, command.Command);
+        Record(command.DeviceId, OperatorActivityKind.ManualOverride, command.Command, command.TargetState);
     }
 
     public IReadOnlyList<OperatorActivity> GetRecentActivities()
@@ -31,51 +31,84 @@ public sealed class OperatorActivityTracker
 
     public IReadOnlyList<string> GetFrequentFollowUps(string deviceId)
     {
+        return GetFollowUpPatterns(deviceId)
+            .OrderByDescending(pattern => pattern.OccurrenceCount)
+            .Select(pattern => pattern.TargetDeviceId)
+            .ToList();
+    }
+
+    public IReadOnlyList<OperatorFollowUpPattern> GetFollowUpPatterns(string deviceId)
+    {
         lock (syncRoot)
         {
-            if (!followUpCounts.TryGetValue(deviceId, out var relatedDevices))
+            if (!followUpPatterns.TryGetValue(deviceId, out var relatedDevices))
             {
                 return [];
             }
 
             return relatedDevices
-                .OrderByDescending(entry => entry.Value)
-                .ThenBy(entry => entry.Key)
-                .Select(entry => entry.Key)
+                .Select(entry => new OperatorFollowUpPattern
+                {
+                    SourceDeviceId = deviceId,
+                    TargetDeviceId = entry.Key,
+                    OccurrenceCount = entry.Value.OccurrenceCount,
+                    ManualOverrideCount = entry.Value.ManualOverrideCount,
+                    LastObservedAtUtc = entry.Value.LastObservedAtUtc,
+                    RecommendedCommand = entry.Value.LastCommand,
+                    RecommendedTargetState = entry.Value.LastTargetState
+                })
+                .OrderByDescending(pattern => pattern.OccurrenceCount)
+                .ThenBy(pattern => pattern.TargetDeviceId)
                 .ToList();
         }
     }
 
-    // A nested dictionary counts sequences such as "Moisture Sensor B" followed by "Pump A".
-    private void Record(string deviceId, OperatorActivityKind kind, string description)
+    // A nested dictionary retains ordered patterns such as "Moisture Sensor B" followed by "Pump A".
+    private void Record(string deviceId, OperatorActivityKind kind, string description, string? targetState = null)
     {
         lock (syncRoot)
         {
-            if (!string.IsNullOrWhiteSpace(previousDeviceId) &&
-                !previousDeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase))
+            if (previousActivity is not null &&
+                !previousActivity.DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase))
             {
-                if (!followUpCounts.TryGetValue(previousDeviceId, out var relatedDevices))
+                if (!followUpPatterns.TryGetValue(previousActivity.DeviceId, out var relatedDevices))
                 {
-                    relatedDevices = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                    followUpCounts[previousDeviceId] = relatedDevices;
+                    relatedDevices = new Dictionary<string, FollowUpPatternStats>(StringComparer.OrdinalIgnoreCase);
+                    followUpPatterns[previousActivity.DeviceId] = relatedDevices;
                 }
 
-                relatedDevices[deviceId] = relatedDevices.GetValueOrDefault(deviceId) + 1;
+                var existing = relatedDevices.GetValueOrDefault(deviceId) ?? new FollowUpPatternStats();
+                relatedDevices[deviceId] = existing with
+                {
+                    OccurrenceCount = existing.OccurrenceCount + 1,
+                    ManualOverrideCount = existing.ManualOverrideCount + (kind == OperatorActivityKind.ManualOverride ? 1 : 0),
+                    LastObservedAtUtc = DateTime.UtcNow,
+                    LastCommand = kind == OperatorActivityKind.ManualOverride ? description : existing.LastCommand,
+                    LastTargetState = kind == OperatorActivityKind.ManualOverride ? targetState : existing.LastTargetState
+                };
             }
 
-            recentActivities.Enqueue(new OperatorActivity
+            var activity = new OperatorActivity
             {
                 DeviceId = deviceId,
                 Kind = kind,
                 Description = description
-            });
+            };
+            recentActivities.Enqueue(activity);
 
             if (recentActivities.Count > MaximumActivityEvents)
             {
                 recentActivities.Dequeue();
             }
 
-            previousDeviceId = deviceId;
+            previousActivity = activity;
         }
     }
+
+    private sealed record FollowUpPatternStats(
+        int OccurrenceCount = 0,
+        int ManualOverrideCount = 0,
+        DateTime LastObservedAtUtc = default,
+        string? LastCommand = null,
+        string? LastTargetState = null);
 }
