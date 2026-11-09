@@ -5,6 +5,10 @@
 **Module:** PROG7312  
 **Project:** Smart-X Final Integrated System
 
+## Authorship and AI Assistance
+
+This Smart-X project was developed, tested, reviewed, and submitted by **Thonipho Mavhungu**. ChatGPT was used as a support tool during development, including assistance with UI presentation ideas, documentation wording, explaining C# concepts, troubleshooting, and reviewing implementation approaches. All final decisions, integration, testing, commits, and submission responsibility remained with the student.
+
 ## Purpose
 
 This document records the improvements made to the final Smart-X application in response to the lecturer feedback received for Part 1 and Part 2. The final project is presented as one connected IoT management system rather than as separate Part 1, Part 2, and POE applications.
