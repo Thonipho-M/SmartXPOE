@@ -1,6 +1,7 @@
 using SmartX.Api.Data;
 using SmartX.Api.Services;
 using SmartX.Shared.Models;
+using SmartX.Shared.Validation;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -72,6 +73,16 @@ sensors.MapPost("/", (SensorProfile profile) =>
             message = "Device ID, MAC address and deployment location are required."
         });
     }
+
+    if (!SmartXInputValidator.IsValidMacAddress(profile.MacAddress))
+    {
+        return Results.BadRequest(new
+        {
+            message = "Enter a MAC address in the format AA:BB:CC:DD:EE:FF."
+        });
+    }
+
+    profile.MacAddress = profile.MacAddress.Trim().ToUpperInvariant();
 
     var macAddressAlreadyExists = registeredSensors.Any(sensor =>
         sensor.MacAddress.Equals(profile.MacAddress, StringComparison.OrdinalIgnoreCase));
@@ -485,9 +496,9 @@ telemetry.MapGet("/{deviceId}", (string deviceId) =>
 
 IResult StoreTelemetryPacket<T>(TelemetryPacket<T> packet, List<TelemetryPacket<T>> packetList)
 {
-    if (string.IsNullOrWhiteSpace(packet.DeviceId) || string.IsNullOrWhiteSpace(packet.MetricName))
+    if (!SmartXInputValidator.TryValidateTelemetry(packet, out var validationMessage))
     {
-        return Results.BadRequest(new { message = "Device ID and metric name are required." });
+        return Results.BadRequest(new { message = validationMessage });
     }
 
     var sensorExists = liveDeviceRegistry.ContainsDevice(packet.DeviceId);

@@ -1,6 +1,7 @@
 @page "/telemetry"
 @inject SmartX.Client.Services.SensorApiClient SensorApi
 @inject SmartX.Client.Services.SmartXWorkspaceState WorkspaceState
+@using SmartX.Shared.Validation
 @* UI layout created with ChatGPT assistance and reviewed by Thonipho Mavhungu. *@
 
 <PageTitle>Telemetry Workspace</PageTitle>
@@ -316,6 +317,21 @@
 
     private async Task RegisterSensorAsync()
     {
+        if (string.IsNullOrWhiteSpace(newSensor.DeviceId) ||
+            string.IsNullOrWhiteSpace(newSensor.DeploymentLocation))
+        {
+            message = "Enter a device ID and deployment location before registering the sensor.";
+            messageStyle = "alert-danger";
+            return;
+        }
+
+        if (!SmartXInputValidator.IsValidMacAddress(newSensor.MacAddress))
+        {
+            message = "Enter a MAC address in the format AA:BB:CC:DD:EE:FF.";
+            messageStyle = "alert-danger";
+            return;
+        }
+
         try
         {
             var response = await SensorApi.RegisterSensorAsync(newSensor);
