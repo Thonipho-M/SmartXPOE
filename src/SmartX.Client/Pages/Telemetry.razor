@@ -156,7 +156,7 @@
                     </InputSelect>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label" for="attachmentFile">Attachment (max 10 MB)</label>
+                    <label class="form-label" for="attachmentFile">Attachment (TXT, LOG, JSON, XML, JPG, PNG or PDF; max 10 MB)</label>
                     <InputFile id="attachmentFile" class="form-control" OnChange="SelectAttachment" accept=".txt,.log,.json,.xml,.jpg,.jpeg,.png,.pdf" />
                 </div>
                 <div class="col-md-3 d-flex gap-2">
@@ -437,6 +437,26 @@
     private void SelectAttachment(InputFileChangeEventArgs eventArgs)
     {
         selectedAttachmentFile = eventArgs.File;
+
+        var extension = Path.GetExtension(selectedAttachmentFile.Name);
+        var supportedExtensions = new[] { ".txt", ".log", ".json", ".xml", ".jpg", ".jpeg", ".png", ".pdf" };
+
+        if (!supportedExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+        {
+            selectedAttachmentFile = null;
+            attachmentMessage = "Choose a TXT, LOG, JSON, XML, JPG, PNG, or PDF attachment.";
+            attachmentMessageStyle = "alert-danger";
+            return;
+        }
+
+        if (selectedAttachmentFile.Size == 0 || selectedAttachmentFile.Size > 10 * 1024 * 1024)
+        {
+            selectedAttachmentFile = null;
+            attachmentMessage = "Choose a file that is larger than 0 bytes and no more than 10 MB.";
+            attachmentMessageStyle = "alert-danger";
+            return;
+        }
+
         attachmentMessage = $"{selectedAttachmentFile.Name} is ready to upload.";
         attachmentMessageStyle = "alert-info";
     }

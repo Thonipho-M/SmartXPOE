@@ -29,6 +29,18 @@ This document records the improvements made to the final Smart-X application in 
 
 **Update made:** Proactive alerts remain connected to their device investigation history. The active-alert system now displays a repeat count when the same issue is detected more than once, instead of producing duplicate alert cards. This makes an ongoing fault visible without overwhelming the user with repeated notifications.
 
+### Input validation and API configuration
+
+**Feedback:** The API address was hard-coded, and sensor registration accepted invalid MAC addresses and telemetry values with limited validation.
+
+**Update made:** The client API address is now held in `wwwroot/appsettings.json`, rather than directly in the startup code. The registration screen and API both validate MAC addresses using the `AA:BB:CC:DD:EE:FF` format. The API also validates telemetry values before they enter the live stream, including sensible limits for moisture, humidity, pH, temperatures, power usage, and voltage.
+
+### Attachment security
+
+**Feedback:** The attachment uploader needed stronger validation and security controls.
+
+**Update made:** The client and API now allow only TXT, LOG, JSON, XML, JPG, PNG, and PDF files up to 10 MB. The API verifies the extension, size, and declared content type again on the server, stores files with generated names outside the public web root, prevents accidental overwrite, and protects accepted file contents at rest with ASP.NET Core Data Protection.
+
 ## Part 2 feedback addressed
 
 ### Navigation and active pillar state
@@ -70,14 +82,9 @@ Automated Insights rank patterns using frequency, manual-override evidence, and 
 - **Network Topology:** mesh graph, device/MAC search, connectivity analysis, failure simulation, minimum-cost routing, and timestamp-range history queries.
 - **Shared experience:** a user can investigate one device across the monitoring, control, and network screens without losing their selected context.
 
-## Remaining improvement work
+## Deployment note
 
-The following Part 1 feedback items are recorded as future improvements and are not claimed as completed by this document:
-
-- Move the API base address from client code into configuration.
-- Add stronger MAC-address format validation and telemetry value range validation.
-- Add additional security controls for uploaded files and stored configuration data.
-- Add explicit upload size/type validation feedback at both client and API levels.
+The current project applies validation and protected local attachment storage for the coursework environment. A production deployment would additionally use managed secrets, role-based user access, virus scanning, cloud key management, and a managed file store.
 
 ## Evidence
 

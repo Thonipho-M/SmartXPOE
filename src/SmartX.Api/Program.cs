@@ -1,5 +1,6 @@
 using SmartX.Api.Data;
 using SmartX.Api.Services;
+using Microsoft.AspNetCore.DataProtection;
 using SmartX.Shared.Models;
 using SmartX.Shared.Validation;
 using System.Text.Json.Serialization;
@@ -7,6 +8,7 @@ using System.Text.Json.Serialization;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddDataProtection().SetApplicationName("SmartX");
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddCors(options =>
@@ -24,6 +26,7 @@ builder.Services.AddSingleton<PredictiveRecommendationEngine>();
 builder.Services.AddSingleton<TelemetrySimulationState>();
 builder.Services.AddSingleton<MeshNetworkGraph>();
 builder.Services.AddSingleton<ActiveAlertStateStore>();
+builder.Services.AddSingleton<ProtectedAttachmentStore>();
 
 var app = builder.Build();
 
@@ -50,6 +53,7 @@ var recommendationEngine = app.Services.GetRequiredService<PredictiveRecommendat
 var telemetrySimulation = app.Services.GetRequiredService<TelemetrySimulationState>();
 var meshNetwork = app.Services.GetRequiredService<MeshNetworkGraph>();
 var activeAlertStates = app.Services.GetRequiredService<ActiveAlertStateStore>();
+var protectedAttachmentStore = app.Services.GetRequiredService<ProtectedAttachmentStore>();
 
 // This list is temporary storage for Part 1. It is cleared when the API stops.
 var registeredSensors = new List<SensorProfile>();
@@ -129,18 +133,26 @@ sensors.MapPost("/{deviceId}/attachments", async (string deviceId, HttpRequest r
         return Results.BadRequest(new { message = "Upload the attachment as multipart form data." });
     }
 
+    if (request.ContentLength is > AttachmentUploadValidator.MaximumFileSizeBytes + 4_096)
+    {
+        return Results.BadRequest(new { message = "Attachments must be 10 MB or smaller." });
+    }
+
     var form = await request.ReadFormAsync();
     var uploadedFile = form.Files.GetFile("file");
 
-    if (uploadedFile is null || uploadedFile.Length == 0)
+    if (uploadedFile is null)
     {
         return Results.BadRequest(new { message = "Choose a file to attach." });
     }
 
-    const long maximumFileSize = 10 * 1024 * 1024;
-    if (uploadedFile.Length > maximumFileSize)
+    if (!AttachmentUploadValidator.TryValidate(
+            uploadedFile.FileName,
+            uploadedFile.ContentType,
+            uploadedFile.Length,
+            out var uploadValidationMessage))
     {
-        return Results.BadRequest(new { message = "Attachments must be 10 MB or smaller." });
+        return Results.BadRequest(new { message = uploadValidationMessage });
     }
 
     var safeDeviceFolder = CreateSafeFolderName(deviceId);
@@ -151,15 +163,12 @@ sensors.MapPost("/{deviceId}/attachments", async (string deviceId, HttpRequest r
     var storedFileName = $"{Guid.NewGuid():N}_{safeFileName}";
     var storedFilePath = Path.Combine(uploadDirectory, storedFileName);
 
-    await using (var destination = File.Create(storedFilePath))
-    {
-        await uploadedFile.CopyToAsync(destination);
-    }
+    await protectedAttachmentStore.StoreAsync(uploadedFile, storedFilePath);
 
     var attachment = new SensorAttachment
     {
         FileName = safeFileName,
-        ContentType = uploadedFile.ContentType,
+        ContentType = AttachmentUploadValidator.GetContentType(safeFileName),
         SizeBytes = uploadedFile.Length,
         UploadedAtUtc = DateTime.UtcNow
     };
@@ -188,6 +197,7 @@ sensors.MapGet("/{deviceId}/attachments", (string deviceId) =>
         .Select(file => new SensorAttachment
         {
             FileName = file.Name[(file.Name.IndexOf('_') + 1)..],
+            ContentType = AttachmentUploadValidator.GetContentType(file.Name),
             SizeBytes = file.Length,
             UploadedAtUtc = file.LastWriteTimeUtc
         })
